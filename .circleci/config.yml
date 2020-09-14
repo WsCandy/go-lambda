@@ -1,0 +1,78 @@
+defaults: &defaults
+  docker:
+    - image: wscandy/ci-aws:1.1.0
+  working_directory: /go/src/lambda
+  environment:
+    - FUNCTION_NAME: lambda
+    - REGION: eu-west-2
+
+version: 2.1
+
+jobs:
+  source:
+    <<: *defaults
+    steps:
+      - checkout
+      - persist_to_workspace:
+          root: .
+          paths: .
+  test:
+    docker:
+      - image: circleci/golang:1.14.2
+    working_directory: /go/src/lambda
+    steps:
+      - attach_workspace:
+          at: /go/src/lambda
+      - run:
+          name: Test
+          command: go test -v
+  build:
+    docker:
+      - image: circleci/golang:1.14.2
+    working_directory: /go/src/lambda
+    steps:
+      - attach_workspace:
+          at: /go/src/lambda
+      - run:
+          name: Dependendcies
+          command: go get ./...
+      - run:
+          name: Build
+          command: GOOS=linux go build -o main *.go
+      - run:
+          name: Package
+          command: zip -r archive.zip main;
+      - store_artifacts:
+          path: archive.zip
+          destination: builds/archive.zip
+      - persist_to_workspace:
+          root: .
+          paths:
+            - archive.zip
+  deploy:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: /go/src/lambda
+      - run:
+          name: Deploy
+          command: aws lambda update-function-code --function-name $FUNCTION_NAME --region $REGION --zip-file fileb://archive.zip
+
+workflows:
+  build_deploy:
+    jobs:
+      - source
+      - test:
+          requires:
+            - source
+      - build:
+          requires:
+            - test
+#      - deploy:
+#          context: wscandy
+#          requires:
+#            - build
+#          filters:
+#            branches:
+#              only:
+#                - master
