@@ -1,3 +1,7 @@
-.idea
+.idea/
+.terraform/
 
+archive.zip
 main
+.DS_Store
+.terraform.lock.hcl
